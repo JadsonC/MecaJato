@@ -4,6 +4,9 @@ from .models import Cliente, Carro
 import re
 from django.core import serializers
 import json
+from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse
+from django.shortcuts import redirect
 
 def clientes(request):
     if request.method == 'GET':
@@ -51,5 +54,38 @@ def att_cliente(request):
     id_cliente = request.POST.get('id_cliente')
     cliente = Cliente.objects.filter(id = id_cliente)
     cliente_json = json.loads(serializers.serialize('json', cliente))[0]['fields']
-    print(cliente_json)
-    return JsonResponse(cliente_json)
+    
+    carros = Carro.objects.filter(cliente=cliente[0])
+    carros_json = json.loads(serializers.serialize('json', carros))
+    carros_json = [{'fields': carro['fields'], 'id': carro['pk']} for carro in carros_json]
+    data = {'cliente': cliente_json, 'carros': carros_json}
+
+    return JsonResponse(data)
+
+@csrf_exempt
+def update_carro(request, id):
+    nome_carro = request.POST.get('carro')
+    placa = request.POST.get('placa')
+    ano = request.POST.get('ano')
+    
+    carro = Carro.objects.get(id=id)
+    
+    list_carros = Carro.objects.filter(placa=placa).exclude(id=id)
+    
+    if list_carros.exists():
+        return HttpResponse('Placa já existente')
+    
+    carro.carro = nome_carro
+    carro.placa = placa
+    carro.ano = ano
+    carro.save()
+    return HttpResponse('Dados alterados com sucesso!')
+
+@csrf_exempt
+def excluir_carro(request, id):
+    try:
+        carro = Carro.objects.get(id=id)
+        carro.delete()
+        return redirect(reverse('clientes')+f'?aba=att_cliente&id_cliente={id}')
+    except:
+        return redirect(reverse('clientes'))
